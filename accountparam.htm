@@ -5,7 +5,7 @@
     <!--The viewport meta tag is used to improve the presentation and behavior
     of the samples on iOS devices-->
     <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
-    <title>account Locator</title>
+    <title>Account Locator</title>
 
     <link rel="stylesheet" href="http://js.arcgis.com/3.10/js/esri/css/esri.css">
     <style>
@@ -60,8 +60,13 @@
           infoWindow: popup,
           slider: false
         });
-        var basemap = new ArcGISTiledMapServiceLayer("http://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/");
+        var basemap = new ArcGISTiledMapServiceLayer("http://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer");
         map.addLayer(basemap);
+
+        var accountbase = new FeatureLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/");
+        map.addLayer(accountbase);
+        
+
 
         //apply a popup template to the accounts layer to format popup info 
         var popupTemplate = new PopupTemplate({
@@ -71,8 +76,8 @@
             label: "Address:",
             visible: true
           }, {
-            fieldName: "account",
-            label: "account:",
+            fieldName: "MunicipalName",
+            label: "Municipality:",
             visible: true
           }]
         });
@@ -90,6 +95,7 @@
         map.on("click", function (e) {
           var query = new Query();
           query.geometry = e.mapPoint;
+          var center = graphicsUtils.graphicsExtent(selection).getCenter();
           var deferred = accounts.selectFeatures(query, FeatureLayer.SELECTION_NEW, function (selection) {
             //update the url param if a account was located
             if (selection.length > 0) {
@@ -101,7 +107,7 @@
             }
           });
           map.infoWindow.setFeatures([deferred]);
-          map.infoWindow.show(e.mapPoint);
+          map.infoWindow.show(center);
         });
 
         map.on("layers-add-result", function (result) {
@@ -117,8 +123,8 @@
           on(emailLink, "click", function (evt) {
             var feature = map.infoWindow.getSelectedFeature();
             var url = window.location;
-            var emailLink = "mailto:?subject=Account Map of :" + 
-              feature.attributes.accountno + "&body=Check out this map: %0D%0A " + 
+            var emailLink = "mailto:?subject=Map of Account:" + 
+              feature.attributes.AccountNo + "&body=Check out this map: %0D%0A " + 
               window.location;
             window.location.href = emailLink;
           });
