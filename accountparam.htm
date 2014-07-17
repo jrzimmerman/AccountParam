@@ -1,181 +1,183 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9" />
-    <!--The viewport meta tag is used to improve the presentation and behavior of the samples
-      on iOS devices-->
-    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
-    <title>Select Parcel by URL Parameters</title>
-    <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/2.6/js/dojo/dijit/themes/claro/claro.css">
+    <!--The viewport meta tag is used to improve the presentation and behavior
+    of the samples on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>account Locator</title>
+
+    <link rel="stylesheet" href="http://js.arcgis.com/3.10/js/esri/css/esri.css">
     <style>
-      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
-      .esriScalebar{
-        padding: 20px 20px;
-      }
-      #map{
-        padding:0;
+      html, body, #map {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
       }
     </style>
-    <script type="text/javascript">var djConfig = {parseOnLoad: true};</script>
-    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=2.6"></script>
 
-    <script type="text/javascript" language="Javascript">
+    <script>var dojoConfig = { parseOnLoad: true };</script>
+    <script src="http://js.arcgis.com/3.10/"></script>
+    <script>
+      var map;
+      var accounts;
+      require([
+        "esri/map", "esri/layers/FeatureLayer", 
+        "esri/layers/ArcGISTiledMapServiceLayer", "esri/tasks/query",
+        "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol",
+        "esri/graphic", "esri/dijit/Popup", "esri/dijit/PopupTemplate",
+        "esri/urlUtils", "esri/graphicsUtils",
+        "esri/Color", 
+        "dojo/on", "dojo/query", "dojo/parser", "dojo/dom-construct",
 
-//The purpose of this map is to demonstrate a method for selecting a feature based upon a set of URL parameters.
-//Most elements of this have been cobbled together from ArcGIS JavaScript API 2.6 code samples found here: http://help.arcgis.com/en/webapi/javascript/arcgis/help/jssamples_start.htm
-//Required parameters are map & lot. Here's an example address: http://gis.amherstma.gov/apps/parcelparams.htm?map=14A&lot=304
-//This sample was developed by the Town of Amherst, MA GIS. http://www.amherstma.gov/maps
+        "dijit/layout/BorderContainer", "dijit/layout/ContentPane", "dojo/domReady!"
+      ], function(
+        Map, FeatureLayer, 
+        ArcGISTiledMapServiceLayer, Query,
+        SimpleFillSymbol, SimpleLineSymbol,
+        Graphic, Popup, PopupTemplate,
+        urlUtils, graphicsUtils,
+        Color, 
+        on, query, parser, domConstruct
+      ) {
+        //apply a selection symbol that determines the symbology for selected features 
+        var sfs = new SimpleFillSymbol(
+          SimpleFillSymbol.STYLE_SOLID, 
+          new SimpleLineSymbol(
+            SimpleLineSymbol.STYLE_SOLID, 
+            new Color([111, 0, 255]), 
+            2
+          ), 
+          new Color([111, 0, 255, 0.15])
+        );
 
-      dojo.require("dijit.layout.BorderContainer");
-      dojo.require("dijit.layout.ContentPane");
-      dojo.require("esri.map");
-      dojo.require("esri.tasks.query");
+        var popup = new Popup({
+          fillSymbol: sfs
+        }, domConstruct.create("div"));
 
-//Most code samples simply use "map" as the variable for map. We're using theMap here to avoid confusion simply because there happens to be a feature attribute named "map"
-//and we use a url parameter named "map"
-      var theMap, queryTask, query;
-      var symbol, infoTemplate;
-      var M, L;
+        map = new Map("map", {
+          infoWindow: popup,
+          slider: false
+        });
+        var basemap = new ArcGISTiledMapServiceLayer("http://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/");
+        map.addLayer(basemap);
 
-      function init()
-{
-//create the map
-      theMap = new esri.Map("mapDiv");
+        //apply a popup template to the accounts layer to format popup info 
+        var popupTemplate = new PopupTemplate({
+          title: "{AccountNo}",
+          fieldInfos: [{
+            fieldName: "FULL_ADDRE",
+            label: "Address:",
+            visible: true
+          }, {
+            fieldName: "account",
+            label: "account:",
+            visible: true
+          }]
+        });
 
-//add the Esri World Topo Map layer
-      var topoMapLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer");
-      theMap.addLayer(topoMapLayer);
+        //add the accounts layer to the map as a feature layer in selection mode we'll use this layer to query and display the selected accounts
+        accounts = new FeatureLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/0", {
+          outFields: ["*"],
+          infoTemplate: popupTemplate,
+          mode: FeatureLayer.MODE_SELECTION
+        });
 
-//add the parcel map layers
-//Use the ImageParameters to set map service layer definitions and map service visible layers before adding to the client map.
-        var imageParameters = new esri.layers.ImageParameters();
+        accounts.setSelectionSymbol(sfs);
 
-//I want only certain layers to be visible. This can only be done with a dynamic map service and it does impact performance. Cached map services are recommended.
-        imageParameters.layerIds = [0,10,11,12,14];
-        imageParameters.layerOption = esri.layers.ImageParameters.LAYER_OPTION_SHOW;
-        imageParameters.transparent = true;
+        //when users click on the map select the account using the map point and update the url parameter
+        map.on("click", function (e) {
+          var query = new Query();
+          query.geometry = e.mapPoint;
+          var deferred = accounts.selectFeatures(query, FeatureLayer.SELECTION_NEW, function (selection) {
+            //update the url param if a account was located
+            if (selection.length > 0) {
+              var accountno = selection[0].attributes["accountno"];
+              //Refresh the URL with the currently selected account
+              if (typeof history.pushState !== "undefined") {
+                window.history.pushState(null, null, "?accountno=" + selection[0].attributes.accountno);
+              }
+            }
+          });
+          map.infoWindow.setFeatures([deferred]);
+          map.infoWindow.show(e.mapPoint);
+        });
 
-//construct ArcGISDynamicMapServiceLayer with imageParameters from above
-        var dynamicMapServiceLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://gis.amherstma.gov/ArcGIS/rest/services/iOS/PropertyMap/MapServer", {"imageParameters":imageParameters});
-        theMap.addLayer(dynamicMapServiceLayer);
+        map.on("layers-add-result", function (result) {
+          // Add a link into the InfoWindow Actions panel       
+          var emailLink = domConstruct.create("a", {
+            "class": "action",
+            "innerHTML": "Email Map",
+            "href": "javascript:void(0);"
+          }, query(".actionList", map.infoWindow.domNode)[0]);
 
-//build query task
-        queryTask = new esri.tasks.QueryTask("http://gis.amherstma.gov/ArcGIS/rest/services/iOS/PropertyMap/MapServer/0");
+          // Register a function to be called when the user clicks on
+          // the above link
+          on(emailLink, "click", function (evt) {
+            var feature = map.infoWindow.getSelectedFeature();
+            var url = window.location;
+            var emailLink = "mailto:?subject=Account Map of :" + 
+              feature.attributes.accountno + "&body=Check out this map: %0D%0A " + 
+              window.location;
+            window.location.href = emailLink;
+          });
 
-//build query filter
-        query = new esri.tasks.Query();
-        query.returnGeometry = true;
-        query.outFields = ["PIN", "PID", "LOCATION", "OWNER_NAME", "Map", "Lot"];
+          //When users navigate through the history using the browser back/forward buttons select appropriate account  
+          //https://developer.mozilla.org/en/DOM/Manipulating_the_browser_history
+          window.onpopstate = function (event) {
+            var accountno = getaccountFromUrl(document.location.href);
+            if (accountno) {
+              selectaccount(accountno);
+            } else {
+              accounts.clearSelection();
+              map.infoWindow.hide();
+            }
+          };
 
+          //if a accountno is specified in url param select that feature 
+          var accountno = getaccountFromUrl(document.location.href);
+          selectaccount(accountno);
+        });
 
-//create the infoTemplate to be used in an InfoWindow.
-//All ${attributeName} will be substituted with the attribute value for current feature.
-        infoTemplate = new esri.InfoTemplate("${PIN}", "Parcel # : ${PIN}<br/> Location : ${Location}<br />Owner : ${Owner_Name}");
+        map.addLayers([accounts]);
 
-//create symbol for selected features
-		symbol = new esri.symbol.SimpleFillSymbol(esri.symbol.SimpleFillSymbol.STYLE_SOLID,
-		new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID,
-		new dojo.Color([255,0,0]), 2),new dojo.Color([255,255,0,0.25]));
-
-//pass the url parameters.
-		var urlObject = esri.urlToObject(document.location.href);
-		if (urlObject.query)
-		{
-			if (urlObject.query.map)
-				{ M = urlObject.query.map; }
-			if (urlObject.query.lot)
-				{ L = urlObject.query.lot; }
-
-//set query based on the parameters, which in this case are combined into Map-Lot to match the PIN field.
-//they are combined manually in constructing the thePin variable because hyphens cause problems in JavaScript when passed in variables.
-		var thePin = "MapParId = '" + M + "-" + L + "'";
-		query.where = thePin;
-
-//execute query and call showResults on completion
-        queryTask.execute(query,showResults);
-
-		}
-
-//Listen for click event on the map, when the user clicks on the map call executeQueryTask function.
-        dojo.connect(theMap, "onClick", executeQueryTask);
-
-}
-
-
-     function executeQueryTask(evt)
-{
-
-//onClick event returns the evt point where the user clicked on the map.
-//This is contains the mapPoint (esri.geometry.point) and the screenPoint (pixel xy where the user clicked).
-//set query geometry = to evt.mapPoint Geometry
-
-//Clear the query originally set by the url parameters
- 		query.where = "PIN IS NOT NULL";
-
-//Query based on the location clicked
-        query.geometry = evt.mapPoint;
-
-//Execute task and call showResults on completion
-        queryTask.execute(query, showResults);
-
-}
-
-
-      function showResults(featureSet)
-{
-
-//remove all graphics on the maps graphics layer
-        theMap.graphics.clear();
-        theMap.infoWindow.hide();
-
-//QueryTask returns a featureSet.  Loop through features in the featureSet and add them to the map.
-
-//Performance enhancer - assign featureSet array to a single variable.
-		var resultFeatures = featureSet.features;
-
-        for (var i=0, il=resultFeatures.length; i<il; i++)
-        {
-//Get the current feature from the featureSet.
-//Feature is a graphic
-          var graphic = resultFeatures[i];
-          graphic.setSymbol(symbol);
-
-//Set the infoTemplate.
-          graphic.setInfoTemplate(infoTemplate);
-
-//Add graphic to the map graphics layer.
-          theMap.graphics.add(graphic);
+        //extract the account no from the url
+        function getaccountFromUrl(url) {
+          var urlObject = urlUtils.urlToObject(url);
+          if (urlObject.query && urlObject.query.accountno) {
+            return urlObject.query.accountno;
+          } else {
+            return null;
+          }
         }
 
-//Zoom to the extent of the graphics
-  			var myFeatureExtent = esri.graphicsExtent(resultFeatures);
- 			theMap.setExtent(myFeatureExtent);
-
-//Add info to the  bottomPane, which we elect to show above the map.
-	dojo.byId('bottomPane').innerHTML = "Parcel ID: <b>" + graphic.attributes.PIN + "</b><br/> Location: <b>" + graphic.attributes.Location + "</b><br/> Owner: <b>" + graphic.attributes.Owner_Name +
-	"</b><br/><a target=blank href=http://gis.amherstma.gov/images/cards/" + graphic.attributes.PID + ".pdf>Download Property Card</a> | <a target=blank href=http://gis.amherstma.gov/public/viewer.aspx?application=parcelapp&targetids=" +
-	graphic.attributes.PIN + ">Map it on Amherst Maps</a> | <a href=mailto:?subject=Map%20of%20Amherst%20Parcel%20"
-	+ graphic.attributes.PIN + "&body=This%20is%20a%20link%20to%20Parcel%20" + graphic.attributes.PIN + "%20in%20Amherst:%20http://gis.amherstma.gov/apps/parcelparams.htm?map="
-	+ graphic.attributes.Map + "%26lot=" + graphic.attributes.Lot + ">Email a Link</a>";
-
-//Refresh the URL with the currently selected parcel
-	window.history.pushState(null,null,"?map=" + graphic.attributes.Map + "&lot=" + graphic.attributes.Lot);
-
- }
-
-      dojo.addOnLoad(init);
+        //select account from the feature layer by creating a query to look for the input account no 
+        function selectaccount(accountno) {
+          if (accountno) {
+            var query = new Query();
+            query.where = "accountno = '" + accountno + "'";
+            var deferred = accounts.selectFeatures(query, FeatureLayer.SELECTION_NEW, function (selection) {
+              var center = graphicsUtils.graphicsExtent(selection).getCenter();
+              var extHandler = map.on("extent-change", function () {
+                extHandler.remove();
+                //zoom to the center then display the popup 
+                map.infoWindow.setFeatures(selection);
+                map.infoWindow.show(center);
+              });
+              map.centerAt(center);
+            });
+          }
+        }
+      });
     </script>
   </head>
+  
   <body class="claro">
-
-    <div id="content" dojotype="dijit.layout.BorderContainer" design="headline" gutters="true" style="width: 800px; height: 900px; margin: 0;">
-      <div id="mapDiv" dojotype="dijit.layout.ContentPane" region="center" style="overflow:hidden;">
-      </div>
-       <div id="bottomPane" style="height:70px;" dojotype="dijit.layout.ContentPane" region="top">
-      </div>
+    <div data-dojo-type="dijit/layout/BorderContainer" data-dojo-props="design:'headline',gutters:false" 
+    style="width: 100%; height: 100%; margin: 0;">
+      <div id="map" data-dojo-type="dijit/layout/ContentPane" data-dojo-props="region:'center'"></div>
     </div>
-
-
   </body>
+
 </html>
