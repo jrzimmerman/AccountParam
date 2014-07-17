@@ -1,0 +1,181 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9" />
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples
+      on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+    <title>Select Parcel by URL Parameters</title>
+    <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/2.6/js/dojo/dijit/themes/claro/claro.css">
+    <style>
+      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
+      .esriScalebar{
+        padding: 20px 20px;
+      }
+      #map{
+        padding:0;
+      }
+    </style>
+    <script type="text/javascript">var djConfig = {parseOnLoad: true};</script>
+    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=2.6"></script>
+
+    <script type="text/javascript" language="Javascript">
+
+//The purpose of this map is to demonstrate a method for selecting a feature based upon a set of URL parameters.
+//Most elements of this have been cobbled together from ArcGIS JavaScript API 2.6 code samples found here: http://help.arcgis.com/en/webapi/javascript/arcgis/help/jssamples_start.htm
+//Required parameters are map & lot. Here's an example address: http://gis.amherstma.gov/apps/parcelparams.htm?map=14A&lot=304
+//This sample was developed by the Town of Amherst, MA GIS. http://www.amherstma.gov/maps
+
+      dojo.require("dijit.layout.BorderContainer");
+      dojo.require("dijit.layout.ContentPane");
+      dojo.require("esri.map");
+      dojo.require("esri.tasks.query");
+
+//Most code samples simply use "map" as the variable for map. We're using theMap here to avoid confusion simply because there happens to be a feature attribute named "map"
+//and we use a url parameter named "map"
+      var theMap, queryTask, query;
+      var symbol, infoTemplate;
+      var M, L;
+
+      function init()
+{
+//create the map
+      theMap = new esri.Map("mapDiv");
+
+//add the Esri World Topo Map layer
+      var topoMapLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer");
+      theMap.addLayer(topoMapLayer);
+
+//add the parcel map layers
+//Use the ImageParameters to set map service layer definitions and map service visible layers before adding to the client map.
+        var imageParameters = new esri.layers.ImageParameters();
+
+//I want only certain layers to be visible. This can only be done with a dynamic map service and it does impact performance. Cached map services are recommended.
+        imageParameters.layerIds = [0,10,11,12,14];
+        imageParameters.layerOption = esri.layers.ImageParameters.LAYER_OPTION_SHOW;
+        imageParameters.transparent = true;
+
+//construct ArcGISDynamicMapServiceLayer with imageParameters from above
+        var dynamicMapServiceLayer = new esri.layers.ArcGISDynamicMapServiceLayer("http://gis.amherstma.gov/ArcGIS/rest/services/iOS/PropertyMap/MapServer", {"imageParameters":imageParameters});
+        theMap.addLayer(dynamicMapServiceLayer);
+
+//build query task
+        queryTask = new esri.tasks.QueryTask("http://gis.amherstma.gov/ArcGIS/rest/services/iOS/PropertyMap/MapServer/0");
+
+//build query filter
+        query = new esri.tasks.Query();
+        query.returnGeometry = true;
+        query.outFields = ["PIN", "PID", "LOCATION", "OWNER_NAME", "Map", "Lot"];
+
+
+//create the infoTemplate to be used in an InfoWindow.
+//All ${attributeName} will be substituted with the attribute value for current feature.
+        infoTemplate = new esri.InfoTemplate("${PIN}", "Parcel # : ${PIN}<br/> Location : ${Location}<br />Owner : ${Owner_Name}");
+
+//create symbol for selected features
+		symbol = new esri.symbol.SimpleFillSymbol(esri.symbol.SimpleFillSymbol.STYLE_SOLID,
+		new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID,
+		new dojo.Color([255,0,0]), 2),new dojo.Color([255,255,0,0.25]));
+
+//pass the url parameters.
+		var urlObject = esri.urlToObject(document.location.href);
+		if (urlObject.query)
+		{
+			if (urlObject.query.map)
+				{ M = urlObject.query.map; }
+			if (urlObject.query.lot)
+				{ L = urlObject.query.lot; }
+
+//set query based on the parameters, which in this case are combined into Map-Lot to match the PIN field.
+//they are combined manually in constructing the thePin variable because hyphens cause problems in JavaScript when passed in variables.
+		var thePin = "MapParId = '" + M + "-" + L + "'";
+		query.where = thePin;
+
+//execute query and call showResults on completion
+        queryTask.execute(query,showResults);
+
+		}
+
+//Listen for click event on the map, when the user clicks on the map call executeQueryTask function.
+        dojo.connect(theMap, "onClick", executeQueryTask);
+
+}
+
+
+     function executeQueryTask(evt)
+{
+
+//onClick event returns the evt point where the user clicked on the map.
+//This is contains the mapPoint (esri.geometry.point) and the screenPoint (pixel xy where the user clicked).
+//set query geometry = to evt.mapPoint Geometry
+
+//Clear the query originally set by the url parameters
+ 		query.where = "PIN IS NOT NULL";
+
+//Query based on the location clicked
+        query.geometry = evt.mapPoint;
+
+//Execute task and call showResults on completion
+        queryTask.execute(query, showResults);
+
+}
+
+
+      function showResults(featureSet)
+{
+
+//remove all graphics on the maps graphics layer
+        theMap.graphics.clear();
+        theMap.infoWindow.hide();
+
+//QueryTask returns a featureSet.  Loop through features in the featureSet and add them to the map.
+
+//Performance enhancer - assign featureSet array to a single variable.
+		var resultFeatures = featureSet.features;
+
+        for (var i=0, il=resultFeatures.length; i<il; i++)
+        {
+//Get the current feature from the featureSet.
+//Feature is a graphic
+          var graphic = resultFeatures[i];
+          graphic.setSymbol(symbol);
+
+//Set the infoTemplate.
+          graphic.setInfoTemplate(infoTemplate);
+
+//Add graphic to the map graphics layer.
+          theMap.graphics.add(graphic);
+        }
+
+//Zoom to the extent of the graphics
+  			var myFeatureExtent = esri.graphicsExtent(resultFeatures);
+ 			theMap.setExtent(myFeatureExtent);
+
+//Add info to the  bottomPane, which we elect to show above the map.
+	dojo.byId('bottomPane').innerHTML = "Parcel ID: <b>" + graphic.attributes.PIN + "</b><br/> Location: <b>" + graphic.attributes.Location + "</b><br/> Owner: <b>" + graphic.attributes.Owner_Name +
+	"</b><br/><a target=blank href=http://gis.amherstma.gov/images/cards/" + graphic.attributes.PID + ".pdf>Download Property Card</a> | <a target=blank href=http://gis.amherstma.gov/public/viewer.aspx?application=parcelapp&targetids=" +
+	graphic.attributes.PIN + ">Map it on Amherst Maps</a> | <a href=mailto:?subject=Map%20of%20Amherst%20Parcel%20"
+	+ graphic.attributes.PIN + "&body=This%20is%20a%20link%20to%20Parcel%20" + graphic.attributes.PIN + "%20in%20Amherst:%20http://gis.amherstma.gov/apps/parcelparams.htm?map="
+	+ graphic.attributes.Map + "%26lot=" + graphic.attributes.Lot + ">Email a Link</a>";
+
+//Refresh the URL with the currently selected parcel
+	window.history.pushState(null,null,"?map=" + graphic.attributes.Map + "&lot=" + graphic.attributes.Lot);
+
+ }
+
+      dojo.addOnLoad(init);
+    </script>
+  </head>
+  <body class="claro">
+
+    <div id="content" dojotype="dijit.layout.BorderContainer" design="headline" gutters="true" style="width: 800px; height: 900px; margin: 0;">
+      <div id="mapDiv" dojotype="dijit.layout.ContentPane" region="center" style="overflow:hidden;">
+      </div>
+       <div id="bottomPane" style="height:70px;" dojotype="dijit.layout.ContentPane" region="top">
+      </div>
+    </div>
+
+
+  </body>
+</html>
