@@ -23,7 +23,7 @@
       var map;
       var accounts;
       require([
-        "esri/map", "esri/layers/FeatureLayer", 
+        "esri/map", "esri/layers/FeatureLayer", "esri/layers/ArcGISDynamicMapServiceLayer",
         "esri/layers/ArcGISTiledMapServiceLayer", "esri/tasks/query",
         "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol",
         "esri/graphic", "esri/dijit/Popup", "esri/dijit/PopupTemplate",
@@ -33,7 +33,7 @@
 
         "dijit/layout/BorderContainer", "dijit/layout/ContentPane", "dojo/domReady!"
       ], function(
-        Map, FeatureLayer, 
+        Map, FeatureLayer, ArcGISDynamicMapServiceLayer,
         ArcGISTiledMapServiceLayer, Query,
         SimpleFillSymbol, SimpleLineSymbol,
         Graphic, Popup, PopupTemplate,
@@ -63,7 +63,7 @@
         var basemap = new ArcGISTiledMapServiceLayer("http://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer");
         map.addLayer(basemap);
 
-        var accountbase = new FeatureLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/");
+        var accountbase = new ArcGISDynamicMapServiceLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/");
         map.addLayer(accountbase);
         
 
@@ -99,7 +99,7 @@
           var deferred = accounts.selectFeatures(query, FeatureLayer.SELECTION_NEW, function (selection) {
             //update the url param if a account was located
             if (selection.length > 0) {
-              var accountno = selection[0].attributes["accountno"];
+              var accountno = selection[0].attributes["AccountNo"];
               //Refresh the URL with the currently selected account
               if (typeof history.pushState !== "undefined") {
                 window.history.pushState(null, null, "?accountno=" + selection[0].attributes.accountno);
@@ -107,7 +107,7 @@
             }
           });
           map.infoWindow.setFeatures([deferred]);
-          map.infoWindow.show(center);
+          map.infoWindow.show(e.mapPoint);
         });
 
         map.on("layers-add-result", function (result) {
