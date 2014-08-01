@@ -60,7 +60,7 @@
           infoWindow: popup,
           slider: false
         });
-        var basemap = new ArcGISTiledMapServiceLayer("http://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer");
+        var basemap = new ArcGISDynamicMapServiceLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/");
         map.addLayer(basemap);
 
         var accountbase = new ArcGISDynamicMapServiceLayer("http://207.255.7.12/eadsgroupgis/rest/services/EADS_VIEWER_FILES/2014_JRS_EADS_VIEWER_JZ/MapServer/");
