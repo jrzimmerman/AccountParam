@@ -156,7 +156,7 @@
         function selectAccount(accountno) {
           if (accountno) {
             var query = new Query();
-            query.where = "AccountNo = '" + accountno + "'";
+            query.where = "AccountNo = " + accountno;
             var deferred = accounts.selectFeatures(query, FeatureLayer.SELECTION_NEW, function (selection) {
               var center = graphicsUtils.graphicsExtent(selection).getCenter();
               var extHandler = map.on("extent-change", function () {
